@@ -57,7 +57,7 @@ fn main() -> io::Result<()>{
 
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct Header {
     ver: u8,
     msg_type: u8,
@@ -448,5 +448,45 @@ impl From<ContentFormat> for u16 {
 
 #[cfg(test)]
 mod test {
+    use crate::{Header, MessageType, generate_coap_message_id, RequestMethod, generate_coap_token};
 
+
+    #[test]
+    fn header_to_bytes() {
+        let msg_id = generate_coap_message_id();
+        let mut header = Header{
+            ver: 1,
+            msg_type: MessageType::Con as u8,
+            tkl: 8,
+            code: RequestMethod::GET as u8,
+            msg_id: msg_id,
+        };
+
+        let mut bytes = header.to_bytes();
+        assert_eq!(bytes[0], 0b0100_1000);
+        assert_eq!(bytes[1], RequestMethod::GET as u8);
+        assert_eq!(bytes[2..], msg_id.to_be_bytes());
+
+        header.code = RequestMethod::POST as u8;
+        bytes = header.to_bytes();
+        assert_eq!(bytes[1], RequestMethod::POST as u8);
+        let hop = Header::from_bytes(&bytes);
+        assert_eq!(hop.is_none(), false);
+        let h= hop.unwrap();
+        assert_eq!(h.code, RequestMethod::POST as u8);
+        assert_eq!(h, header)
+    }
+
+    #[test]
+    fn frame_to_bytes() {
+        let token = generate_coap_token(8);
+        let header = Header{
+            ver: 1,
+            msg_type: MessageType::Con as u8,
+            tkl: 8,
+            code: RequestMethod::GET as u8,
+            msg_id: generate_coap_message_id(),
+        };
+
+    }
 }
