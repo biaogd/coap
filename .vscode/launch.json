@@ -3,5 +3,43 @@
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "configurations": []
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'coap'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=coap",
+                    "--package=coap"
+                ],
+                "filter": {
+                    "name": "coap",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'coap'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=coap",
+                    "--package=coap"
+                ],
+                "filter": {
+                    "name": "coap",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
 }
