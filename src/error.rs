@@ -15,3 +15,17 @@ impl Error for InvalidContentFormat {
         None
     }
 }
+
+
+#[derive(Debug)]
+pub struct InvalidType;
+
+impl Display for InvalidType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CoAP error: invalid message type")
+    }
+}
+
+impl Error for InvalidType {
+    
+}

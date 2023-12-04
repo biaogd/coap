@@ -1,10 +1,9 @@
 use core::convert::TryFrom;
 use std::collections::BTreeMap;
 
-use bytes::{BufMut, Bytes};
 use rand::Rng;
 
-use crate::error::InvalidContentFormat;
+use crate::error::{InvalidContentFormat, InvalidType};
 
 /// coap version
 const VER: u8 = 1;
@@ -22,13 +21,46 @@ pub struct Header {
 #[derive(Debug, PartialEq, Eq)]
 pub struct CoAPFrame {
     header: Header,
-    token: Bytes,
+    token: Vec<u8>,
     options: BTreeMap<u16, Vec<Vec<u8>>>,
     ff: u8,
-    payload: Bytes,
+    payload: Vec<u8>,
 }
 
-enum OptionEnum {
+#[derive(Debug, Clone, Copy)]
+pub enum MessageType {
+    Con,
+    Non,
+    Ack,
+    Rst,
+}
+
+impl From<MessageType> for u8 {
+    fn from(value: MessageType) -> Self {
+        match value {
+            MessageType::Con => 0,
+            MessageType::Non => 1,
+            MessageType::Ack => 2,
+            MessageType::Rst => 3,
+        }
+    }
+}
+
+impl TryFrom<u8> for MessageType {
+    type Error = InvalidType;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(MessageType::Con),
+            1 => Ok(MessageType::Non),
+            2 => Ok(MessageType::Ack),
+            3 => Ok(MessageType::Rst),
+            _ => Err(InvalidType)
+        }
+    }
+}
+
+pub enum OptionEnum {
     IfMatch,
     UriHost,
     ETag,
@@ -131,7 +163,7 @@ impl CoapOption {
         }
 
         if delta == 14 {
-            encoded_option.put_u16(self.number - 269 as u16)
+            encoded_option.push((self.number - 269 as u16).try_into().unwrap())
         }
 
         if vl == 13 {
@@ -139,7 +171,7 @@ impl CoapOption {
         }
 
         if vl == 14 {
-            encoded_option.put_u16((length - 269) as u16);
+            encoded_option.push(((length - 269) as u16).try_into().unwrap());
         }
 
         encoded_option.extend_from_slice(&self.value);
@@ -152,13 +184,13 @@ impl CoapOption {
 
 impl Header {
 
-    fn new(msg_type: u8) -> Self {
+    pub fn new(msg_type: u8, code: u8) -> Self {
         Header {
             ver: VER,
             msg_type: msg_type,
-            tkl: 0,
-            code: 0,
-            msg_id: 0,
+            tkl: TOKEN_LEN,
+            code,
+            msg_id: generate_coap_message_id(),
         }
     }
 
@@ -191,8 +223,15 @@ impl Header {
 
 impl CoAPFrame {
 
-    pub fn new() -> Self {
-        todo!()
+    pub fn new(header: Header, options: BTreeMap<u16, Vec<Vec<u8>>>, payload: Vec<u8>) -> Self {
+        let tkl = header.tkl;
+        CoAPFrame {
+            header,
+            token: generate_coap_token(tkl as usize).into(),
+            options,
+            ff: 0xFF,
+            payload,
+        }
     }
 
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
@@ -285,12 +324,12 @@ impl CoAPFrame {
         }
     }
 
-    pub fn to_bytes(&self) -> Bytes {
-        let mut buf = bytes::BytesMut::new();
-        buf.put(&self.header.to_bytes()[..]);
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&self.header.to_bytes()[..]);
 
         //push token
-        buf.put(self.token.clone());
+        buf.extend_from_slice(&self.token);
         let mut option_vec: Vec<CoapOption> = Vec::new();
         let mut delta;
         let mut before = 0;
@@ -306,10 +345,10 @@ impl CoAPFrame {
             buf.extend_from_slice(&ele.encode())
         }
         if self.payload.len() > 0 {
-            buf.put_u8(0xFFu8);
-            buf.put(self.payload.clone());
+            buf.push(0xFFu8);
+            buf.extend_from_slice(&self.payload);
         }
-        buf.into()
+        buf
     }
 }
 
@@ -369,9 +408,9 @@ mod test {
     use crate::{
         frame::{
             generate_coap_message_id, generate_coap_token, CoAPFrame, ContentFormat, Header,
-            OptionEnum,
+            OptionEnum, MessageType
         },
-        request::{MessageType, RequestMethod},
+        request::RequestMethod,
     };
 
     #[test]
