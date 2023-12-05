@@ -29,3 +29,16 @@ impl Display for InvalidType {
 impl Error for InvalidType {
     
 }
+
+#[derive(Debug)]
+pub struct InvalidResponseCode;
+
+impl Display for InvalidResponseCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CoAP error: invalid response code")
+    }
+}
+
+impl Error for InvalidResponseCode {
+    
+}

@@ -20,7 +20,7 @@ pub struct Header {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct CoAPFrame {
-    header: Header,
+    pub header: Header,
     token: Vec<u8>,
     options: BTreeMap<u16, Vec<Vec<u8>>>,
     ff: u8,
@@ -60,6 +60,7 @@ impl TryFrom<u8> for MessageType {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum OptionEnum {
     IfMatch,
     UriHost,
@@ -125,6 +126,14 @@ impl From<OptionEnum> for u16 {
     }
 }
 
+// impl From<OptionEnum> for String {
+//     fn from(value: OptionEnum) -> Self {
+//         match value {
+//             OptionEnum::IfMatch => 
+//         }
+//     }
+// }
+
 /// CoAP
 struct CoapOption {
     number: u16,
@@ -163,7 +172,7 @@ impl CoapOption {
         }
 
         if delta == 14 {
-            encoded_option.push((self.number - 269 as u16).try_into().unwrap())
+            encoded_option.push((self.number - 269_u16).try_into().unwrap())
         }
 
         if vl == 13 {
@@ -192,6 +201,22 @@ impl Header {
             code,
             msg_id: generate_coap_message_id(),
         }
+    }
+
+    pub fn set_tkl(&mut self, tkl: u8) {
+        self.tkl = tkl;
+    }
+
+    pub fn set_msg_id(&mut self, msg_id: u16) {
+        self.msg_id = msg_id;
+    }
+
+    pub fn get_type(&self) -> u8 {
+        self.msg_type
+    }
+
+    pub fn get_code(&self) -> u8 {
+        self.code
     }
 
     fn to_bytes(&self) -> [u8; 4] {
@@ -227,7 +252,7 @@ impl CoAPFrame {
         let tkl = header.tkl;
         CoAPFrame {
             header,
-            token: generate_coap_token(tkl as usize).into(),
+            token: generate_coap_token(tkl as usize),
             options,
             ff: 0xFF,
             payload,
@@ -256,47 +281,47 @@ impl CoAPFrame {
                     let mut length: u16 = vl as u16;
 
                     if delta < 13 {
-                        number = number + delta as u16;
+                        number += delta as u16;
                         if vl < 13 {
-                            offset = offset + 1 as usize;
+                            offset += 1;
                         } else if vl == 13 {
                             length = 13 + bytes[offset + 1] as u16;
-                            offset = offset + 2 as usize;
+                            offset += 2;
                         } else {
                             length = 269
-                                + u16::from_be_bytes([bytes[offset + 1], bytes[offset + 2]]) as u16;
-                            offset = offset + 3 as usize;
+                                + u16::from_be_bytes([bytes[offset + 1], bytes[offset + 2]]);
+                            offset += 3;
                         }
                     } else if delta == 13 {
                         number = number + 13 + bytes[offset + 1] as u16;
                         if vl < 13 {
-                            offset = offset + 2 as usize;
+                            offset += 2;
                         } else if vl == 13 {
                             length = 13 + bytes[offset + 2] as u16;
-                            offset = offset + 3 as usize;
+                            offset += 3;
                         } else {
                             length = 269
-                                + u16::from_be_bytes([bytes[offset + 2], bytes[offset + 3]]) as u16;
-                            offset = offset + 4 as usize;
+                                + u16::from_be_bytes([bytes[offset + 2], bytes[offset + 3]]);
+                            offset += 4;
                         }
                     } else {
                         number = number
                             + 269
-                            + u16::from_be_bytes([bytes[offset + 1], bytes[offset + 2]]) as u16;
+                            + u16::from_be_bytes([bytes[offset + 1], bytes[offset + 2]]);
 
                         if vl < 13 {
-                            offset = offset + 3 as usize;
+                            offset += 3;
                         } else if vl == 13 {
                             length = 13 + bytes[offset + 3] as u16;
-                            offset = offset + 4 as usize;
+                            offset += 4;
                         } else {
                             length = 269
-                                + u16::from_be_bytes([bytes[offset + 3], bytes[offset + 4]]) as u16;
-                            offset = offset + 5 as usize;
+                                + u16::from_be_bytes([bytes[offset + 3], bytes[offset + 4]]);
+                            offset += 5;
                         }
                     };
                     let value = bytes[offset..(offset + length as usize)].to_vec();
-                    offset = offset + length as usize;
+                    offset += length as usize;
 
                     let option_list = options.get(&number);
                     match option_list {
@@ -317,10 +342,10 @@ impl CoAPFrame {
         }
         CoAPFrame {
             header,
-            token: token.to_vec().into(),
+            token: token.to_vec(),
             options,
             ff: 0xFF,
-            payload: payload.into(),
+            payload,
         }
     }
 
@@ -344,11 +369,19 @@ impl CoAPFrame {
         for ele in option_vec {
             buf.extend_from_slice(&ele.encode())
         }
-        if self.payload.len() > 0 {
+        if !self.payload.is_empty() {
             buf.push(0xFFu8);
             buf.extend_from_slice(&self.payload);
         }
         buf
+    }
+
+    pub fn get_body(&self) -> Vec<u8> {
+        self.payload.clone()
+    }
+
+    pub fn get_options(&self) -> BTreeMap<u16, Vec<Vec<u8>>> {
+        self.options.clone()
     }
 }
 
@@ -420,22 +453,22 @@ mod test {
             ver: 1,
             msg_type: MessageType::Con as u8,
             tkl: 8,
-            code: RequestMethod::GET as u8,
+            code: RequestMethod::Get as u8,
             msg_id: msg_id,
         };
 
         let mut bytes = header.to_bytes();
         assert_eq!(bytes[0], 0b0100_1000);
-        assert_eq!(bytes[1], RequestMethod::GET as u8);
+        assert_eq!(bytes[1], RequestMethod::Get as u8);
         assert_eq!(bytes[2..], msg_id.to_be_bytes());
 
-        header.code = RequestMethod::POST as u8;
+        header.code = RequestMethod::Post as u8;
         bytes = header.to_bytes();
-        assert_eq!(bytes[1], RequestMethod::POST as u8);
+        assert_eq!(bytes[1], RequestMethod::Post as u8);
         let hop = Header::from_bytes(&bytes);
         assert_eq!(hop.is_none(), false);
         let h = hop.unwrap();
-        assert_eq!(h.code, RequestMethod::POST as u8);
+        assert_eq!(h.code, RequestMethod::Post as u8);
         assert_eq!(h, header)
     }
 
@@ -446,7 +479,7 @@ mod test {
             ver: 1,
             msg_type: MessageType::Con as u8,
             tkl: token.len() as u8,
-            code: RequestMethod::GET as u8,
+            code: RequestMethod::Get as u8,
             msg_id: generate_coap_message_id(),
         };
 
